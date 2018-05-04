@@ -13,17 +13,15 @@ void usage()
 
 void launchRaft(ev::EventLoop* loop, Raft* raft)
 {
-    static int propose = 0;
-
     loop->runEvery(1s, [=](){
         auto ret = raft->GetState();
         if (ret.isLeader) {
-            raft->Propose(json::Value(propose));
-            propose++;
+            raft->Propose(json::Value("raft example"));
         }
     });
 
-    raft->SetApplyCallback([](const ApplyMsg& msg){
+    raft->SetApplyCallback([](const ApplyMsg& msg) {
+        assert(msg.command.getStringView() == "raft example");
     });
 }
 
