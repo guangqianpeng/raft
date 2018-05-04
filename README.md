@@ -2,7 +2,7 @@
 
 # 简介
 
-该版本的raft实现源自[MIT 6.824](http://nil.csail.mit.edu/6.824/2017/)，我做完lab以后我又用C++实现了一遍。相比于go语言的版本，这个版本的特点有：
+该版本的raft实现源自[MIT 6.824](http://nil.csail.mit.edu/6.824/2017/)，做完lab以后我用C++实现了一遍。相比于go语言的版本，这个版本的特点有：
 
 - RPC框架使用了我自己写的[jrpc](https://github.com/guangqianpeng/jrpc)，请求和响应均为异步的，而lab中是同步的
 - 使用多线程 + EventLoop的并发模型，而不是goroutine
@@ -18,7 +18,7 @@
 # TODO 
 
 - Log compaction
-- Tests
+- Test
 - Benchmark
 
 # 实现
