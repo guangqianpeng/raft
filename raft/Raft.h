@@ -20,21 +20,6 @@
 #include <raft/LogSlice.h>
 
 class RaftPeer;
-class Raft;
-
-struct ApplyMsg
-{
-    ApplyMsg(int index_, const json::Value& command_)
-            : index(index_)
-            , command(command_)
-    {}
-
-    int index;
-    json::Value command;
-};
-
-typedef std::function<void(const ApplyMsg&)> ApplyCallback;
-
 
 class Raft: ev::noncopyable
 {
@@ -56,7 +41,7 @@ public:
     void AddRaftPeer(const ev::InetAddress& serverAddress);
 
     //
-    // set callback of apply,
+    // set callback of apply, thread safe
     //
     void SetApplyCallback(const ApplyCallback& cb);
 
@@ -239,11 +224,13 @@ struct RequestVoteArgs
     int lastLogIndex;
     int lastLogTerm;
 };
+
 struct RequestVoteReply
 {
     int term;
     bool voteGranted;
 };
+
 struct AppendEntriesArgs
 {
     int term;
@@ -252,10 +239,22 @@ struct AppendEntriesArgs
     json::Value entries;
     int leaderCommit;
 };
+
 struct AppendEntriesReply
 {
     int term;
     bool success;
+};
+
+struct ApplyMsg
+{
+    ApplyMsg(int index_, const json::Value& command_)
+            : index(index_)
+            , command(command_)
+    {}
+
+    int index;
+    json::Value command;
 };
 
 #endif //RAFT_RAFT_H

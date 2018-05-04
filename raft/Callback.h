@@ -13,7 +13,10 @@ struct RequestVoteReply;
 struct AppendEntriesArgs;
 struct AppendEntriesReply;
 
+struct ApplyMsg;
+
 typedef std::function<void(const RequestVoteReply&)> RequestVoteCallback;
 typedef std::function<void(const AppendEntriesReply&)> AppendEntriesCallback;
+typedef std::function<void(const ApplyMsg&)> ApplyCallback;
 
 #endif //RAFT_CALLBACK_H
