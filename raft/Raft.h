@@ -140,9 +140,11 @@ private:
     }
 
     template <typename Task>
-    void RunInLoop(Task&& task);
+    void RunTaskInLoop(Task&& task);
     template <typename Task>
-    void RunInLoopAndWait(Task&& task);
+    void QueueTaskInLoop(Task&& task);
+    template <typename Task>
+    void RunTaskInLoopAndWait(Task&& task);
 
     void StartInLoop();
 
@@ -185,6 +187,9 @@ private:
 
     void AssertNotStarted() const
     { assert(!started_); }
+
+    bool IsSingleNode() const
+    { return peerNum_ == 1; }
 
 private:
     constexpr static int kVotedForNull = -1;

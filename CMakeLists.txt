@@ -29,11 +29,11 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 
 include_directories(
         raft
-        jrpc
-        jrpc/3rd/tinyev
-        jrpc/3rd/jackson
+        3rd/jrpc
+        3rd/jrpc/3rd/tinyev
+        3rd/jrpc/3rd/jackson
         ${PROJECT_SOURCE_DIR}
         ${PROJECT_BINARY_DIR})
-add_subdirectory(jrpc)
+add_subdirectory(3rd/jrpc)
 add_subdirectory(raft)
 

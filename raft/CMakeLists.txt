@@ -26,3 +26,4 @@ add_executable(raft
         RaftServiceStub.h RaftClientStub.h
         main.cc Random.h Callback.h LogSlice.h)
 target_link_libraries(raft jrpc)
+install(TARGETS raft DESTINATION bin)

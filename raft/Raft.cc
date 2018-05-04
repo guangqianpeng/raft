@@ -25,7 +25,7 @@ Raft::~Raft() = default;
 
 void Raft::AddRaftPeer(const ev::InetAddress& serverAddress)
 {
-    RunInLoopAndWait([&](){
+    RunTaskInLoopAndWait([&]() {
         AssertNotStarted();
         AssertInLoop();
         auto ptr = new RaftPeer(this, peerNum_, serverAddress);
@@ -36,7 +36,7 @@ void Raft::AddRaftPeer(const ev::InetAddress& serverAddress)
 
 void Raft::SetApplyCallback(const ApplyCallback& cb)
 {
-    RunInLoopAndWait([=](){
+    RunTaskInLoopAndWait([=]() {
         AssertNotStarted();
         AssertInLoop();
         applyCallback_ = cb;
@@ -45,7 +45,7 @@ void Raft::SetApplyCallback(const ApplyCallback& cb)
 
 void Raft::Start()
 {
-    RunInLoopAndWait([=](){
+    RunTaskInLoopAndWait([=]() {
         StartInLoop();
     });
 }
@@ -55,7 +55,9 @@ Raft::GetStateResult Raft::GetState()
     int currentTerm;
     bool isLeader;
 
-    RunInLoopAndWait([&, this](){
+    RunTaskInLoopAndWait([&, this]() {
+        AssertStarted();
+
         currentTerm = currentTerm_;
         isLeader = (role_ == kLeader);
     });
@@ -68,7 +70,9 @@ Raft::ProposeResult Raft::Propose(const json::Value& command)
     int currentTerm;
     bool isLeader;
 
-    RunInLoopAndWait([&, this](){
+    RunTaskInLoopAndWait([&, this]() {
+        AssertStarted();
+
         index = log_.LastLogIndex() + 1;
         currentTerm = currentTerm_;
         isLeader = (role_ == kLeader);
@@ -78,21 +82,39 @@ Raft::ProposeResult Raft::Propose(const json::Value& command)
             DEBUG("raft[%d] %s, term %d, start log %d",
                   me_, RoleString(), currentTerm_, index);
         }
+
+        if (IsSingleNode()) {
+            //
+            // there is only one node in raft cluster
+            // log proposed should commit and apply soon,
+            // but not before Raft::Propose() return
+            //
+            QueueTaskInLoop([=](){
+                commitIndex_ = index;
+                ApplyLog();
+            });
+        }
     });
     return { index, currentTerm, isLeader };
 };
 
 template <typename Task>
-void Raft::RunInLoop(Task&& task)
+void Raft::RunTaskInLoop(Task&& task)
 {
     loop_->runInLoop(std::forward<Task>(task));
 }
 
 template <typename Task>
-void Raft::RunInLoopAndWait(Task&& task)
+void Raft::QueueTaskInLoop(Task&& task)
+{
+    loop_->queueInLoop(std::forward<Task>(task));
+}
+
+template <typename Task>
+void Raft::RunTaskInLoopAndWait(Task&& task)
 {
     ev::CountDownLatch latch(1);
-    RunInLoop([&, this](){
+    RunTaskInLoop([&, this]() {
         task();
         latch.count();
     });
@@ -148,7 +170,7 @@ void Raft::StartRequestVote()
 void Raft::RequestVote(const RequestVoteArgs& args,
                        const RequestVoteCallback& done)
 {
-    RunInLoop([=](){
+    RunTaskInLoop([=]() {
         RequestVoteReply reply;
         RequestVoteInLoop(args, reply);
         done(reply);
@@ -185,7 +207,7 @@ void Raft::OnRequestVoteReply(int peer,
                               const RequestVoteReply& reply)
 {
     AssertInLoop();
-    RunInLoop([=](){
+    RunTaskInLoop([=]() {
         OnRequestVoteReplyInLoop(peer, args, reply);
     });
 }
@@ -236,7 +258,7 @@ void Raft::StartAppendEntries()
 void Raft::AppendEntries(const AppendEntriesArgs& args,
                          const AppendEntriesCallback& done)
 {
-    RunInLoop([=](){
+    RunTaskInLoop([=]() {
         AppendEntriesReply reply;
         AppendEntriesInLoop(args, reply);
         done(reply);
@@ -295,7 +317,7 @@ void Raft::OnAppendEntriesReply(int peer,
                                 const AppendEntriesReply& reply)
 {
     AssertInLoop();
-    RunInLoop([=](){
+    RunTaskInLoop([=]() {
         OnAppendEntriesReplyInLoop(peer, args, reply);
     });
 }
@@ -320,7 +342,6 @@ void Raft::OnAppendEntriesReplyInLoop(int peer,
                                     nextIndex_[peer] - 1);
         return;
     }
-
 
     int baseIndex = args.prevLogIndex + 1;
     int entryNum = static_cast<int>(args.entries.getSize());
@@ -365,7 +386,6 @@ void Raft::OnAppendEntriesReplyInLoop(int peer,
         nextIndex_[peer] = endIndex;
         matchIndex_[peer] = endIndex - 1;
     }
-
 }
 
 void Raft::Tick()
@@ -453,8 +473,7 @@ void Raft::ToCandidate()
     votedFor_ = me_; // vote myself
     votesGot_ = 1;
 
-    if (votesGot_ > peerNum_ / 2) {
-        // raft cluster of single instance
+    if (IsSingleNode()) {
         ToLeader();
     }
     else {
