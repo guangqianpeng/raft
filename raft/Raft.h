@@ -173,7 +173,7 @@ private:
     void AssertNotStarted() const
     { assert(!started_); }
 
-    bool IsSingleNode() const
+    bool IsStandalone() const
     { return peerNum_ == 1; }
 
 private:

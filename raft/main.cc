@@ -11,6 +11,22 @@ void usage()
     exit(EXIT_FAILURE);
 }
 
+void launchRaft(ev::EventLoop* loop, Raft* raft)
+{
+    static int propose = 0;
+
+    loop->runEvery(1s, [=](){
+        auto ret = raft->GetState();
+        if (ret.isLeader) {
+            raft->Propose(json::Value(propose));
+            propose++;
+        }
+    });
+
+    raft->SetApplyCallback([](const ApplyMsg& msg){
+    });
+}
+
 int main(int argc, char** argv)
 {
     if (argc < 3) {
@@ -41,12 +57,7 @@ int main(int argc, char** argv)
     for (auto& peer: peerAddresses)
         service.AddRaftPeer(peer);
 
-    loop.runEvery(1s, [&](){
-        auto ret = raft.GetState();
-        if (ret.isLeader) {
-            raft.Propose(json::Value());
-        }
-    });
+    launchRaft(&loop, &raft);
 
     rpcServer.start();
     service.StartRaft();

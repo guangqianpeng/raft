@@ -83,7 +83,7 @@ Raft::ProposeResult Raft::Propose(const json::Value& command)
                   me_, RoleString(), currentTerm_, index);
         }
 
-        if (IsSingleNode()) {
+        if (IsStandalone()) {
             //
             // there is only one node in raft cluster
             // log proposed should commit and apply soon,
@@ -473,7 +473,7 @@ void Raft::ToCandidate()
     votedFor_ = me_; // vote myself
     votesGot_ = 1;
 
-    if (IsSingleNode()) {
+    if (IsStandalone()) {
         ToLeader();
     }
     else {
