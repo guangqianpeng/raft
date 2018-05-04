@@ -1,0 +1,32 @@
+{
+  "name": "Raft",
+  "rpc": [
+    {
+      "name": "RequestVote",
+      "params": {
+        "term": 0i32,
+        "candidateId": 0i32,
+        "lastLogIndex": 0i32,
+        "lastLogTerm": 0i32
+      },
+      "returns": {
+        "term": 0i32,
+        "voteGranted": true
+      }
+    },
+    {
+      "name": "AppendEntries",
+      "params": {
+        "term": 0i32,
+        "prevLogIndex": 0i32,
+        "prevLogTerm": 0i32,
+        "entries": [],
+        "leaderCommit": 0i32
+      },
+      "returns": {
+        "term": 0i32,
+        "success": true
+      }
+    }
+  ]
+}

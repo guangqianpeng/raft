@@ -1,0 +1,3 @@
+[submodule "3rd/jrpc"]
+	path = 3rd/jrpc
+	url = https://github.com/guangqianpeng/jrpc.git
