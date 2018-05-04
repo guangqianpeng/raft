@@ -50,8 +50,8 @@
 git clone https://github.com/guangqianpeng/raft.git
 cd raft
 git submodule update --init --recursive
-./build
-./build install
+./build.sh
+./build.sh install
 cd ../raft-build/Release-install/bin
 ```
 
