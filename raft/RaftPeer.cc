@@ -90,11 +90,15 @@ void RaftPeer::AppendEntries(const AppendEntriesArgs& args)
 
         int term = response["term"].getInt32();
         bool success = response["success"].getBool();
+        int expectIndex = response["expectIndex"].getInt32();
+        int expectTerm = response["expectTerm"].getInt32();
 
         loop_->runInLoop([=](){
             AppendEntriesReply reply;
             reply.term = term;
             reply.success = success;
+            reply.expectIndex = expectIndex;
+            reply.expectTerm = expectTerm;
             raft_->OnAppendEntriesReply(peer_, args, reply);
         });
     };

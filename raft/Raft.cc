@@ -11,7 +11,7 @@ using namespace std::chrono_literals;
 using std::placeholders::_1;
 
 Raft::Raft(int me, int heartbeatTimeout, int electionTimeout)
-        : me_(me)
+        : id_(me)
         , heartbeatTimeout_(heartbeatTimeout)
         , electionTimeout_(electionTimeout)
         , randomGen_(me, electionTimeout, 2 * electionTimeout)
@@ -80,7 +80,7 @@ Raft::ProposeResult Raft::Propose(const json::Value& command)
         if (isLeader) {
             log_.Append(currentTerm_, command);
             DEBUG("raft[%d] %s, term %d, start log %d",
-                  me_, RoleString(), currentTerm_, index);
+                  id_, RoleString(), currentTerm_, index);
         }
 
         if (IsStandalone()) {
@@ -130,23 +130,24 @@ void Raft::StartInLoop()
     started_ = true;
 
     DEBUG("raft[%d] %s, peerNum = %d starting...",
-          me_, RoleString(), peerNum_);
+          id_, RoleString(), peerNum_);
 
     // output debug info every 5s
     loop_->runEvery(5s, [=](){
         DEBUG("raft[%d] %s, term %d, #votes %d, commit %d",
-              me_, RoleString(), currentTerm_, votesGot_, commitIndex_);
+              id_, RoleString(), currentTerm_, votesGot_, commitIndex_);
     });
+
+    // connect other peers, non-blocking!
+    for (int i = 0; i < peerNum_; i++) {
+        if (i != id_) {
+            peers_[i]->Start();
+        }
+    }
 
     // tick every 100ms
     loop_->runEvery(kTimeUnitInMilliseconds * 1ms,
                     [this](){ Tick(); });
-
-    for (int i = 0; i < peerNum_; i++) {
-        if (i != me_) {
-            peers_[i]->Start();
-        }
-    }
 }
 
 void Raft::StartRequestVote()
@@ -156,12 +157,12 @@ void Raft::StartRequestVote()
 
     RequestVoteArgs args;
     args.term = currentTerm_;
-    args.candidateId = me_;
+    args.candidateId = id_;
     args.lastLogIndex = log_.LastLogIndex();
     args.lastLogTerm = log_.LastLogTerm();
 
     for (int i = 0; i < peerNum_; i++) {
-        if (i != me_) {
+        if (i != id_) {
             peers_[i]->RequestVote(args);
         }
     }
@@ -192,7 +193,7 @@ void Raft::RequestVoteInLoop(const RequestVoteArgs& args,
         (votedFor_ == kVotedForNull || votedFor_ == args.candidateId) &&
         log_.IsUpToDate(args.lastLogIndex, args.lastLogTerm))
     {
-        DEBUG("raft[%d] -> raft[%d]", me_, args.candidateId);
+        DEBUG("raft[%d] -> raft[%d]", id_, args.candidateId);
         votedFor_ = args.candidateId;
         reply.voteGranted = true;
     }
@@ -228,7 +229,7 @@ void Raft::OnRequestVoteReplyInLoop(int peer,
         return;
     }
 
-    DEBUG("raft[%d] <- raft[%d]", me_, peer);
+    DEBUG("raft[%d] <- raft[%d]", id_, peer);
 
     votesGot_++;
     if (votesGot_ > peerNum_ / 2) {
@@ -242,7 +243,7 @@ void Raft::StartAppendEntries()
     AssertStarted();
 
     for (int i = 0; i < peerNum_; i++) {
-        if (i == me_)
+        if (i == id_)
             continue;
 
         AppendEntriesArgs args;
@@ -308,6 +309,9 @@ void Raft::AppendEntriesInLoop(const AppendEntriesArgs& args,
         reply.success = true;
     }
     else {
+        auto p = log_.LastIndexInTerm(args.prevLogIndex, args.prevLogTerm);
+        reply.expectIndex = p.index;
+        reply.expectTerm = p.term;
         reply.success = false;
     }
 }
@@ -338,34 +342,70 @@ void Raft::OnAppendEntriesReplyInLoop(int peer,
     }
 
     if (!reply.success) {
-        nextIndex_[peer] = std::max(matchIndex_[peer] + 1,
-                                    nextIndex_[peer] - 1);
+        //
+        // log replication failed, back nexIndex_[peer] quickly!!!
+        //
+        int nextIndex = nextIndex_[peer];
+
+        if (reply.expectTerm == args.prevLogTerm) {
+            assert(reply.expectIndex < args.prevLogIndex);
+            nextIndex = reply.expectIndex;
+        }
+        else {
+            assert(reply.expectTerm < args.prevLogTerm);
+            auto p = log_.LastIndexInTerm(nextIndex, reply.expectTerm);
+            nextIndex = p.index;
+        }
+
+        //
+        // take care of duplicate & out-of-order & expired reply
+        //
+        if (nextIndex > nextIndex_[peer]) {
+            nextIndex = nextIndex_[peer] - 1;
+        }
+        if (nextIndex <= matchIndex_[peer]) {
+            DEBUG("raft[%d] %s, nextIndex <= matchIndex_[%d], set to %d",
+                  id_, RoleString(), peer, matchIndex_[peer] + 1);
+            nextIndex = matchIndex_[peer] + 1;
+        }
+
+        nextIndex_[peer] = nextIndex;
         return;
     }
 
-    int baseIndex = args.prevLogIndex + 1;
+    //
+    // log replication succeed
+    //
+    int startIndex = args.prevLogIndex + 1;
     int entryNum = static_cast<int>(args.entries.getSize());
-    int endIndex = baseIndex + entryNum;
+    int endIndex = startIndex + entryNum - 1;
 
-    for (int i = baseIndex; i < endIndex; i++) {
+    for (int i = endIndex; i >= startIndex; i--) {
 
         //
         // log[i] has already replicated on peer,
         // duplicate reply takes no effects
         //
         if (i <= matchIndex_[peer])
-            continue;
+            break;
 
         //
         // a leader cannot immediately conclude that a
         // entry from previous term is committed once it is
         // stored on majority of servers, so, just don't count #replica
         //
-        if (log_.TermAt(i) != currentTerm_)
-            continue;
+        if (log_.TermAt(i) < currentTerm_)
+            break;
+        assert(log_.TermAt(i) == currentTerm_);
 
         //
-        // initial replica is 2, one for me_, one for peer
+        // logs already committed
+        //
+        if (i <= commitIndex_)
+            break;
+
+        //
+        // initial replica is 2, one for id_, one for peer
         //
         int replica = 2;
         for (int p = 0; p < peerNum_; p++) {
@@ -376,15 +416,16 @@ void Raft::OnAppendEntriesReplyInLoop(int peer,
         //
         // update commitIndex monotonically
         //
-        if (replica > peerNum_ / 2 && commitIndex_ < i) {
+        if (replica > peerNum_ / 2) {
             commitIndex_ = i;
+            break;
         }
     }
 
     ApplyLog();
-    if (nextIndex_[peer] < endIndex) {
-        nextIndex_[peer] = endIndex;
-        matchIndex_[peer] = endIndex - 1;
+    if (nextIndex_[peer] <= endIndex) {
+        nextIndex_[peer] = endIndex + 1;
+        matchIndex_[peer] = endIndex;
     }
 }
 
@@ -416,11 +457,11 @@ void Raft::ApplyLog()
     if (commitIndex_ != lastApplied_) {
         if (lastApplied_ + 1 == commitIndex_) {
             DEBUG("raft[%d] %s, term %d, apply log [%d]",
-                  me_, RoleString(), currentTerm_, commitIndex_);
+                  id_, RoleString(), currentTerm_, commitIndex_);
         }
         else {
             DEBUG("raft[%d] %s, term %d, apply log (%d, %d]",
-                  me_, RoleString(), currentTerm_, lastApplied_, commitIndex_);
+                  id_, RoleString(), currentTerm_, lastApplied_, commitIndex_);
         }
     }
 
@@ -451,7 +492,7 @@ void Raft::TickOnHeartbeat()
 void Raft::ToFollower(bool termIncreased)
 {
     if (role_ != kFollower) {
-        DEBUG("raft[%d] %s -> follower", me_, RoleString());
+        DEBUG("raft[%d] %s -> follower", id_, RoleString());
     }
 
     role_ = kFollower;
@@ -465,12 +506,12 @@ void Raft::ToFollower(bool termIncreased)
 void Raft::ToCandidate()
 {
     if (role_ != kCandidate) {
-        DEBUG("raft[%d] %s -> candidate", me_, RoleString());
+        DEBUG("raft[%d] %s -> candidate", id_, RoleString());
     }
 
     role_ = kCandidate;
     currentTerm_++;
-    votedFor_ = me_; // vote myself
+    votedFor_ = id_; // vote myself
     votesGot_ = 1;
 
     if (IsStandalone()) {
@@ -484,7 +525,7 @@ void Raft::ToCandidate()
 
 void Raft::ToLeader()
 {
-    DEBUG("raft[%d] %s -> leader", me_, RoleString());
+    DEBUG("raft[%d] %s -> leader", id_, RoleString());
 
     nextIndex_.assign(peerNum_, log_.LastLogIndex() + 1);
     matchIndex_.assign(peerNum_, kInitialMatchIndex);

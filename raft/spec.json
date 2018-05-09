@@ -25,7 +25,9 @@
       },
       "returns": {
         "term": 0i32,
-        "success": true
+        "success": true,
+        "expectIndex": 0i32,
+        "expectTerm": 0i32
       }
     }
   ]

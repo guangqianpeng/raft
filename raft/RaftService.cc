@@ -59,6 +59,8 @@ void RaftService::AppendEntries(int term,
         json::Value value(json::TYPE_OBJECT);
         value.addMember("term", reply.term);
         value.addMember("success", reply.success);
+        value.addMember("expectIndex", reply.expectIndex);
+        value.addMember("expectTerm", reply.expectTerm);
         done(std::move(value));
     });
 }

@@ -13,15 +13,34 @@
 class LogSlice: ev::noncopyable
 {
 public:
-    LogSlice()
-            : log_{ Entry() }
+    LogSlice(): log_{ Entry() }
     {}
+
+    int FirstLogIndex() const
+    { return 0; }
+
+    int FirstLogTerm() const
+    { return log_[0].term; }
 
     int LastLogIndex() const
     { return lastIndex_; }
 
     int LastLogTerm() const
     { return log_[lastIndex_].term; }
+
+    struct IndexAndTerm {
+        int index;
+        int term;
+    };
+    IndexAndTerm LastIndexInTerm(int startIndex, int term) const
+    {
+        int index = std::min(startIndex, lastIndex_);
+        for (; index >= FirstLogIndex(); index--) {
+            if (TermAt(index) <= term)
+                break;
+        }
+        return { index, TermAt(index) };
+    }
 
     int TermAt(int index) const
     { return log_[index].term; }

@@ -185,7 +185,7 @@ private:
     constexpr static int kTimeUnitInMilliseconds = 100;
     constexpr static int kMaxEntriesSendOneTime = 100;
 
-    const int me_;
+    const int id_;
     int peerNum_ = 0;
     int currentTerm_ = kInitialTerm;     // todo: persistent
     Role role_ = kFollower;
@@ -219,31 +219,33 @@ private:
 
 struct RequestVoteArgs
 {
-    int term;
-    int candidateId;
-    int lastLogIndex;
-    int lastLogTerm;
+    int term = -1;
+    int candidateId = -1;
+    int lastLogIndex = -1;
+    int lastLogTerm = -1;
 };
 
 struct RequestVoteReply
 {
-    int term;
-    bool voteGranted;
+    int term = -1;
+    bool voteGranted = false;
 };
 
 struct AppendEntriesArgs
 {
-    int term;
-    int prevLogIndex;
-    int prevLogTerm;
+    int term = -1;
+    int prevLogIndex = -1;
+    int prevLogTerm = -1;
     json::Value entries;
-    int leaderCommit;
+    int leaderCommit = -1;
 };
 
 struct AppendEntriesReply
 {
-    int term;
-    bool success;
+    int term = -1;
+    bool success = false;
+    int expectIndex = -1;
+    int expectTerm = -1;
 };
 
 struct ApplyMsg
