@@ -17,13 +17,14 @@
 
 # TODO 
 
+- Persistence
 - Log compaction
 - Test
 - Benchmark
 
 # 实现
 
-一个raft节点有两个线程（其实就是两个EventLoop），一个跑rpc server，另一个跑raft算法以及rpc client。若将这些东西放在一个线程里面固然可以简化代码（单线程编程），但是由于rpc框架调度的延迟不确定，可能导致心跳发送不及时。也许应该把rcp client单独放在一个线程，在jrpc的支持下这点不难做到。
+一个raft节点有两个线程（其实就是两个EventLoop），一个跑rpc server，另一个跑raft算法以及rpc client。若将这些东西放在一个线程里面固然可以简化代码（单线程编程），但是由于rpc框架调度的延迟不确定，可能导致心跳发送不及时。也许应该把rpc client单独放在一个线程，在jrpc的支持下这点不难做到。
 
 我在实现raft算法时将其看成一个状态机，状态机的输入有：
 
