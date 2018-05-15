@@ -48,7 +48,7 @@ int main(int argc, char** argv)
     }
 
 
-    Raft raft(me);
+    Raft raft(me, "./raft." + std::to_string(me));
     jrpc::RpcServer rpcServer(&loop, peerAddresses[me]);
     RaftService service(rpcServer, raft);
 

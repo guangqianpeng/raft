@@ -17,14 +17,16 @@
 
 #include <raft/Random.h>
 #include <raft/Callback.h>
-#include <raft/LogSlice.h>
+#include <raft/Log.h>
 
 class RaftPeer;
+class Storage;
 
 class Raft: ev::noncopyable
 {
 public:
     Raft(int me,
+         const std::string& storagePath,
          int heartbeatTimeout = 1,
          int electionTimeout = 5);
 
@@ -137,7 +139,7 @@ private:
     void TickOnElection();
     void TickOnHeartbeat();
 
-    void ToFollower(bool termIncreased);
+    void ToFollower(int targetTerm);
     void ToCandidate();
     void ToLeader();
 
@@ -176,6 +178,9 @@ private:
     bool IsStandalone() const
     { return peerNum_ == 1; }
 
+    void SetCurrentTerm(int term);
+    void SetVotedFor(int votedFor);
+
 private:
     constexpr static int kVotedForNull = -1;
     constexpr static int kInitialTerm = 0;
@@ -186,6 +191,10 @@ private:
     constexpr static int kMaxEntriesSendOneTime = 100;
 
     const int id_;
+
+    typedef std::unique_ptr<Storage> StoragePtr;
+    StoragePtr storage_;
+
     int peerNum_ = 0;
     int currentTerm_ = kInitialTerm;     // todo: persistent
     Role role_ = kFollower;
@@ -194,7 +203,7 @@ private:
 
     int commitIndex_ = kInitialCommitIndex;
     int lastApplied_ = kInitialLastApplied;
-    LogSlice log_;                       // todo: persistent
+    Log log_;                       // todo: persistent
 
     int timeElapsed_ = 0;
     const int heartbeatTimeout_;
@@ -247,6 +256,7 @@ struct AppendEntriesReply
     int expectIndex = -1;
     int expectTerm = -1;
 };
+
 
 struct ApplyMsg
 {

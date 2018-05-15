@@ -6,12 +6,22 @@
 
 #include <raft/Raft.h>
 #include <raft/RaftPeer.h>
+#include <raft/Storage.h>
+
+#include <tinyev/Logger.h>
 
 using namespace std::chrono_literals;
 using std::placeholders::_1;
 
-Raft::Raft(int me, int heartbeatTimeout, int electionTimeout)
-        : id_(me)
+Raft::Raft(int me,
+           const std::string& storagePath,
+           int heartbeatTimeout,
+           int electionTimeout)
+        :  id_(me)
+        , storage_(new Storage(storagePath))
+        , currentTerm_(storage_->GetCurrentTerm())
+        , votedFor_(storage_->GetVotedFor())
+        , log_(storage_.get())
         , heartbeatTimeout_(heartbeatTimeout)
         , electionTimeout_(electionTimeout)
         , randomGen_(me, electionTimeout, 2 * electionTimeout)
@@ -19,6 +29,11 @@ Raft::Raft(int me, int heartbeatTimeout, int electionTimeout)
 {
     ResetTimer();
     SetApplyCallback(std::bind(&Raft::OnApplyDefault, this, _1));
+    DEBUG("raft[%d] %s, term %d, first_index %d, last_index %d",
+          id_, RoleString(),
+          currentTerm_,
+          log_.FirstIndex(),
+          log_.LastIndex());
 }
 
 Raft::~Raft() = default;
@@ -73,7 +88,7 @@ Raft::ProposeResult Raft::Propose(const json::Value& command)
     RunTaskInLoopAndWait([&, this]() {
         AssertStarted();
 
-        index = log_.LastLogIndex() + 1;
+        index = log_.LastIndex() + 1;
         currentTerm = currentTerm_;
         isLeader = (role_ == kLeader);
 
@@ -158,8 +173,8 @@ void Raft::StartRequestVote()
     RequestVoteArgs args;
     args.term = currentTerm_;
     args.candidateId = id_;
-    args.lastLogIndex = log_.LastLogIndex();
-    args.lastLogTerm = log_.LastLogTerm();
+    args.lastLogIndex = log_.LastIndex();
+    args.lastLogTerm = log_.LastTerm();
 
     for (int i = 0; i < peerNum_; i++) {
         if (i != id_) {
@@ -194,7 +209,7 @@ void Raft::RequestVoteInLoop(const RequestVoteArgs& args,
         log_.IsUpToDate(args.lastLogIndex, args.lastLogTerm))
     {
         DEBUG("raft[%d] -> raft[%d]", id_, args.candidateId);
-        votedFor_ = args.candidateId;
+        SetVotedFor(args.candidateId);
         reply.voteGranted = true;
     }
     else
@@ -284,7 +299,7 @@ void Raft::AppendEntriesInLoop(const AppendEntriesArgs& args,
     }
     else if (role_ == kCandidate) {
         // lose leader election
-        ToFollower(false);
+        ToFollower(currentTerm_);
     }
     else if (role_ == kLeader) {
         FATAL("multiple leaders in term %d", currentTerm_);
@@ -301,7 +316,7 @@ void Raft::AppendEntriesInLoop(const AppendEntriesArgs& args,
         //
         // update commit index monotonically
         //
-        int possibleCommit = std::min(args.leaderCommit, log_.LastLogIndex());
+        int possibleCommit = std::min(args.leaderCommit, log_.LastIndex());
         if (commitIndex_ < possibleCommit) {
             commitIndex_ = possibleCommit;
             ApplyLog();
@@ -489,15 +504,30 @@ void Raft::TickOnHeartbeat()
     }
 }
 
-void Raft::ToFollower(bool termIncreased)
+void Raft::SetCurrentTerm(int term)
+{
+    currentTerm_ = term;
+    storage_->PutCurrentTerm(currentTerm_);
+}
+
+void Raft::SetVotedFor(int votedFor)
+{
+    votedFor_ = votedFor;
+    storage_->PutVotedFor(votedFor_);
+}
+
+void Raft::ToFollower(int targetTerm)
 {
     if (role_ != kFollower) {
         DEBUG("raft[%d] %s -> follower", id_, RoleString());
     }
 
+    assert(currentTerm_ <= targetTerm);
+
     role_ = kFollower;
-    if (termIncreased) {
-        votedFor_ = kVotedForNull;
+    if (currentTerm_ < targetTerm) {
+        SetCurrentTerm(targetTerm);
+        SetVotedFor(kVotedForNull);
         votesGot_ = 0;
     }
     ResetTimer();
@@ -510,8 +540,8 @@ void Raft::ToCandidate()
     }
 
     role_ = kCandidate;
-    currentTerm_++;
-    votedFor_ = id_; // vote myself
+    SetCurrentTerm(currentTerm_+1);
+    SetVotedFor(id_); // vote myself
     votesGot_ = 1;
 
     if (IsStandalone()) {
@@ -527,7 +557,7 @@ void Raft::ToLeader()
 {
     DEBUG("raft[%d] %s -> leader", id_, RoleString());
 
-    nextIndex_.assign(peerNum_, log_.LastLogIndex() + 1);
+    nextIndex_.assign(peerNum_, log_.LastIndex() + 1);
     matchIndex_.assign(peerNum_, kInitialMatchIndex);
     role_ = kLeader;
     ResetTimer();
@@ -536,8 +566,7 @@ void Raft::ToLeader()
 void Raft::OnNewInputTerm(int term)
 {
     if (currentTerm_ < term) {
-        currentTerm_ = term;
-        ToFollower(true);
+        ToFollower(term);
     }
 }
 

@@ -24,6 +24,6 @@ add_executable(raft
         RaftPeer.cc RaftPeer.h
         RaftService.h RaftService.cc
         RaftServiceStub.h RaftClientStub.h
-        main.cc Random.h Callback.h LogSlice.h)
-target_link_libraries(raft jrpc)
+        main.cc Random.h Callback.h Log.h Log.cc Storage.cc Storage.h)
+target_link_libraries(raft jrpc leveldb)
 install(TARGETS raft DESTINATION bin)
