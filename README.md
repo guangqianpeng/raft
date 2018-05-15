@@ -7,17 +7,16 @@
 - RPC框架使用了我自己写的[jrpc](https://github.com/guangqianpeng/jrpc)，请求和响应均为异步的，而lab中是同步的
 - 使用多线程 + EventLoop的并发模型，而不是goroutine
 - 使用EventLoop, CountdownLatch之类的线程同步设施，拒绝直接使用mutex
-- 使用JSON格式的序列化/反序列化/持久化方案（应该用protobuf ？）
+- 使用JSON格式的序列化/反序列化，使用LevelDB持久化JSON文本（应该用protobuf ？）
 
 # 功能
 
 - Leader election
-
 - Log replication
+- Persistence
 
 # TODO 
 
-- Persistence
 - Log compaction
 - Test
 - Benchmark
