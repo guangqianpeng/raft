@@ -14,9 +14,8 @@ void usage()
 
 int main(int argc, char** argv)
 {
-    if (argc < 3) {
+    if (argc < 3)
         usage();
-    }
 
     setLogLevel(LOG_LEVEL_DEBUG);
 
