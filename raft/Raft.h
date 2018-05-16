@@ -9,107 +9,49 @@
 #include <vector>
 #include <cassert>
 
-#include <tinyev/EventLoopThread.h>
-#include <tinyev/EventLoop.h>
-#include <tinyev/InetAddress.h>
-
 #include <jackson/Value.h>
 
 #include <raft/Random.h>
 #include <raft/Callback.h>
 #include <raft/Log.h>
+#include <raft/Struct.h>
+#include <raft/Storage.h>
+#include <raft/Config.h>
+#include <raft/RaftPeer.h>
 
-class RaftPeer;
-class Storage;
+namespace raft
+{
 
-class Raft: ev::noncopyable
+class Raft : ev::noncopyable
 {
 public:
-    Raft(int me,
-         const std::string& storagePath,
-         int heartbeatTimeout = 1,
-         int electionTimeout = 5);
+    Raft(const Config& config,
+         const std::vector<RaftPeer*>& peers);
 
-    ~Raft();
+    RaftState GetState() const;
 
-    //
-    // used by raft peers to schedule tasks
-    //
-    ev::EventLoop* GetEventLoop() const { return loop_; }
-
-    //
-    // add a raft peer before start, thread safe
-    //
-    void AddRaftPeer(const ev::InetAddress& serverAddress);
-
-    //
-    // set callback of apply, thread safe
-    //
-    void SetApplyCallback(const ApplyCallback& cb);
-
-    //
-    // start the raft instance, thread safe
-    //
-    void Start();
-
-    //
-    // thread safe, return:
-    //   1. current term
-    //   2. whether this server believes it is the leader
-    //
-    struct GetStateResult {
-        int currentTerm;
-        bool isLeader;
-    };
-    GetStateResult GetState();
-
-    //
-    // the service using Raft (e.g. a k/v server) wants to start
-    // agreement on the next command to be appended to Raft's log. if this
-    // server isn't the leader, returns false. Otherwise start the
-    // agreement and return immediately. there is no guarantee that this
-    // command will ever be committed to the Raft log, since the leader
-    // may fail or lose an election. Thread safe.
-    //
-    // return:
-    //   1. the index that the command will appear if it's ever committed.
-    //   2. current term.
-    //   3. true if this server believes it is the leader.
-    //
-    struct ProposeResult {
-        int expectIndex;
-        int currentTerm;
-        bool isLeader;
-    };
     ProposeResult Propose(const json::Value& command);
 
-    //
-    // RequestVote RPC handler, thread safe
-    //
     void RequestVote(const RequestVoteArgs& args,
-                     const RequestVoteCallback& done);
+                     RequestVoteReply& reply);
 
-    //
-    // RequestVote done callback, thread safe.
-    // In current implementation, it is only called in Raft thread
-    //
     void OnRequestVoteReply(int peer,
                             const RequestVoteArgs& args,
                             const RequestVoteReply& reply);
 
-    //
-    // AppendEntries RPC handler, thread safe
-    //
     void AppendEntries(const AppendEntriesArgs& args,
-                       const AppendEntriesCallback& done);
+                       AppendEntriesReply& reply);
 
-    //
-    // AppendEntries RPC handler, thread safe
-    // In current implementation, it is only called in Raft thread
-    //
     void OnAppendEntriesReply(int peer,
                               const AppendEntriesArgs& args,
                               const AppendEntriesReply& reply);
+
+    //
+    // external timer input
+    //
+    void Tick();
+
+    void DebugOutput() const;
 
 private:
     enum Role
@@ -119,28 +61,14 @@ private:
         kFollower,
     };
 
-    const char* RoleString() const
-    {
-        return role_ == kLeader ?  "leader" :
-               role_ == kFollower? "follower" :
-                                   "candidate";
-    }
-
-    template <typename Task>
-    void RunTaskInLoop(Task&& task);
-    template <typename Task>
-    void QueueTaskInLoop(Task&& task);
-    template <typename Task>
-    void RunTaskInLoopAndWait(Task&& task);
-
-    void StartInLoop();
-
-    void Tick();
     void TickOnElection();
+
     void TickOnHeartbeat();
 
     void ToFollower(int targetTerm);
+
     void ToCandidate();
+
     void ToLeader();
 
     void OnNewInputTerm(int term);
@@ -148,38 +76,24 @@ private:
     void ResetTimer();
 
     void StartRequestVote();
+
     void StartAppendEntries();
 
-    void RequestVoteInLoop(const RequestVoteArgs& args,
-                           RequestVoteReply& reply);
-    void OnRequestVoteReplyInLoop(int peer,
-                                  const RequestVoteArgs& args,
-                                  const RequestVoteReply& reply);
-
-    void AppendEntriesInLoop(const AppendEntriesArgs& args,
-                             AppendEntriesReply& reply);
-    void OnAppendEntriesReplyInLoop(int peer,
-                                    const AppendEntriesArgs& args,
-                                    const AppendEntriesReply& reply);
-
-    void OnApplyDefault(const ApplyMsg& msg);
-
     void ApplyLog();
-
-    void AssertInLoop() const
-    { loop_->assertInLoopThread(); }
-
-    void AssertStarted() const
-    { assert(started_); }
-
-    void AssertNotStarted() const
-    { assert(!started_); }
 
     bool IsStandalone() const
     { return peerNum_ == 1; }
 
     void SetCurrentTerm(int term);
+
     void SetVotedFor(int votedFor);
+
+    const char* RoleString() const
+    {
+        return role_ == kLeader ? "leader" :
+               role_ == kFollower ? "follower" :
+               "candidate";
+    }
 
 private:
     constexpr static int kVotedForNull = -1;
@@ -187,23 +101,20 @@ private:
     constexpr static int kInitialCommitIndex = 0;
     constexpr static int kInitialLastApplied = 0;
     constexpr static int kInitialMatchIndex = 0;
-    constexpr static int kTimeUnitInMilliseconds = 100;
     constexpr static int kMaxEntriesSendOneTime = 100;
 
     const int id_;
+    const int peerNum_;
 
-    typedef std::unique_ptr<Storage> StoragePtr;
-    StoragePtr storage_;
-
-    int peerNum_ = 0;
-    int currentTerm_ = kInitialTerm;     // todo: persistent
+    Storage storage_;
+    int currentTerm_ = kInitialTerm;     // persistent
     Role role_ = kFollower;
-    int votedFor_ = kVotedForNull;       // todo: persistent
+    int votedFor_ = kVotedForNull;       // persistent
     int votesGot_ = 0;
 
     int commitIndex_ = kInitialCommitIndex;
     int lastApplied_ = kInitialLastApplied;
-    Log log_;                       // todo: persistent
+    Log log_;                            // persistent
 
     int timeElapsed_ = 0;
     const int heartbeatTimeout_;
@@ -214,59 +125,13 @@ private:
     std::vector<int> nextIndex_;
     std::vector<int> matchIndex_;
 
-    bool started_ = false;
-
-    typedef std::unique_ptr<RaftPeer> RaftPeerPtr;
-    typedef std::vector<RaftPeerPtr> RaftPeerList;
-    RaftPeerList peers_;
+    typedef std::vector<RaftPeer*> RaftPeerList;
+    const RaftPeerList peers_;
 
     ApplyCallback applyCallback_;
-
-    ev::EventLoopThread loopThread_;
-    ev::EventLoop* loop_;
+    SnapshotCallback snapshotCallback_;
 };
 
-struct RequestVoteArgs
-{
-    int term = -1;
-    int candidateId = -1;
-    int lastLogIndex = -1;
-    int lastLogTerm = -1;
-};
-
-struct RequestVoteReply
-{
-    int term = -1;
-    bool voteGranted = false;
-};
-
-struct AppendEntriesArgs
-{
-    int term = -1;
-    int prevLogIndex = -1;
-    int prevLogTerm = -1;
-    json::Value entries;
-    int leaderCommit = -1;
-};
-
-struct AppendEntriesReply
-{
-    int term = -1;
-    bool success = false;
-    int expectIndex = -1;
-    int expectTerm = -1;
-};
-
-
-struct ApplyMsg
-{
-    ApplyMsg(int index_, const json::Value& command_)
-            : index(index_)
-            , command(command_)
-    {}
-
-    int index;
-    json::Value command;
-};
+}
 
 #endif //RAFT_RAFT_H

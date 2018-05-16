@@ -6,38 +6,52 @@
 #define RAFT_RAFTPEER_H
 
 #include <raft/RaftClientStub.h>
+#include <raft/Callback.h>
+#include <raft/Struct.h>
 
-class Raft;
-struct RequestVoteArgs;
-struct AppendEntriesArgs;
+namespace raft
+{
 
 class RaftPeer: ev::noncopyable
 {
 public:
-    RaftPeer(Raft* raft, int peer, const ev::InetAddress& serverAddress);
+    RaftPeer(int peer, ev::EventLoop* loop, const ev::InetAddress& serverAddress);
+
     ~RaftPeer();
 
     void Start();
+
     void RequestVote(const RequestVoteArgs& args);
+
     void AppendEntries(const AppendEntriesArgs& args);
+
+    void SetRequestVoteReplyCallback(const RequestVoteReplyCallback& cb)
+    { requestVoteReply_ = cb; }
+
+    void SetAppendEntriesReplyCallback(const AppendEntriesReplyCallback& cb)
+    { appendEntriesReply_ = cb; }
 
 private:
     void AssertInLoop()
     { loop_->assertInLoopThread(); }
 
     void SetConnectionCallback();
+
     void OnConnection(bool connected);
 
 private:
-    Raft* raft_;
     const int peer_;
     ev::EventLoop* loop_;
-    bool connected_;
     ev::InetAddress serverAddress_;
+    bool connected_ = false;
+
+    RequestVoteReplyCallback requestVoteReply_;
+    AppendEntriesReplyCallback appendEntriesReply_;
 
     typedef std::unique_ptr<jrpc::RaftClientStub> ClientPtr;
     ClientPtr rpcClient;
 };
 
+}
 
 #endif //RAFT_RAFTPEER_H

@@ -10,10 +10,12 @@
 
 #include <tinyev/noncopyable.h>
 #include <jackson/Value.h>
+#include <raft/Storage.h>
 
-class Storage;
+namespace raft
+{
 
-class Log: ev::noncopyable
+class Log : ev::noncopyable
 {
 public:
     explicit
@@ -37,10 +39,12 @@ public:
     const json::Value& CommandAt(int index) const
     { return log_[index].command; }
 
-    struct IndexAndTerm {
+    struct IndexAndTerm
+    {
         int index;
         int term;
     };
+
     IndexAndTerm LastIndexInTerm(int startIndex, int term) const;
 
     bool IsUpToDate(int index, int term) const;
@@ -56,17 +60,17 @@ public:
 private:
 
     json::Value GetEntryAsJson(int index) const;
+
     void PutEntryFromJson(const json::Value& entry);
 
     struct Entry
     {
         Entry(int term_, const json::Value& command_)
-                : term(term_)
-                , command(command_)
+                : term(term_), command(command_)
         {}
+
         Entry()
-                : term(0)
-                , command(json::TYPE_NULL)
+                : term(0), command(json::TYPE_NULL)
         {}
 
         int term;
@@ -79,5 +83,6 @@ private:
     std::vector<Entry> log_;
 };
 
+}
 
 #endif //RAFT_LOG_H

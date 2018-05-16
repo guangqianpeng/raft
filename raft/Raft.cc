@@ -2,33 +2,29 @@
 // Created by frank on 18-4-19.
 //
 
-#include <chrono>
-
 #include <raft/Raft.h>
 #include <raft/RaftPeer.h>
 #include <raft/Storage.h>
 
 #include <tinyev/Logger.h>
 
-using namespace std::chrono_literals;
-using std::placeholders::_1;
+using namespace raft;
 
-Raft::Raft(int me,
-           const std::string& storagePath,
-           int heartbeatTimeout,
-           int electionTimeout)
-        :  id_(me)
-        , storage_(new Storage(storagePath))
-        , currentTerm_(storage_->GetCurrentTerm())
-        , votedFor_(storage_->GetVotedFor())
-        , log_(storage_.get())
-        , heartbeatTimeout_(heartbeatTimeout)
-        , electionTimeout_(electionTimeout)
-        , randomGen_(me, electionTimeout, 2 * electionTimeout)
-        , loop_(loopThread_.startLoop())
+Raft::Raft(const Config& c, const std::vector<RaftPeer*>& peers)
+        : id_(c.id)
+        , peerNum_(static_cast<int>(peers.size()))
+        , storage_(c.storagePath)
+        , currentTerm_(storage_.GetCurrentTerm())
+        , votedFor_(storage_.GetVotedFor())
+        , log_(&storage_)
+        , heartbeatTimeout_(c.heartbeatTimeout)
+        , electionTimeout_(c.electionTimeout)
+        , randomGen_(id_, electionTimeout_, 2 * electionTimeout_)
+        , peers_(peers)
+        , applyCallback_(c.applyCallback)
+        , snapshotCallback_(c.snapshotCallback)
 {
     ResetTimer();
-    SetApplyCallback(std::bind(&Raft::OnApplyDefault, this, _1));
     DEBUG("raft[%d] %s, term %d, first_index %d, last_index %d",
           id_, RoleString(),
           currentTerm_,
@@ -36,140 +32,37 @@ Raft::Raft(int me,
           log_.LastIndex());
 }
 
-Raft::~Raft() = default;
-
-void Raft::AddRaftPeer(const ev::InetAddress& serverAddress)
+RaftState Raft::GetState() const
 {
-    RunTaskInLoopAndWait([&]() {
-        AssertNotStarted();
-        AssertInLoop();
-        auto ptr = new RaftPeer(this, peerNum_, serverAddress);
-        peers_.emplace_back(ptr);
-        peerNum_++;
-    });
+    return { currentTerm_, role_ == kLeader };
 }
 
-void Raft::SetApplyCallback(const ApplyCallback& cb)
+ProposeResult Raft::Propose(const json::Value& command)
 {
-    RunTaskInLoopAndWait([=]() {
-        AssertNotStarted();
-        AssertInLoop();
-        applyCallback_ = cb;
-    });
-}
+    int index = log_.LastIndex() + 1;
+    int currentTerm = currentTerm_;
+    bool isLeader = (role_ == kLeader);
 
-void Raft::Start()
-{
-    RunTaskInLoopAndWait([=]() {
-        StartInLoop();
-    });
-}
-
-Raft::GetStateResult Raft::GetState()
-{
-    int currentTerm;
-    bool isLeader;
-
-    RunTaskInLoopAndWait([&, this]() {
-        AssertStarted();
-
-        currentTerm = currentTerm_;
-        isLeader = (role_ == kLeader);
-    });
-    return { currentTerm, isLeader };
-}
-
-Raft::ProposeResult Raft::Propose(const json::Value& command)
-{
-    int index;
-    int currentTerm;
-    bool isLeader;
-
-    RunTaskInLoopAndWait([&, this]() {
-        AssertStarted();
-
-        index = log_.LastIndex() + 1;
-        currentTerm = currentTerm_;
-        isLeader = (role_ == kLeader);
-
-        if (isLeader) {
-            log_.Append(currentTerm_, command);
-            DEBUG("raft[%d] %s, term %d, start log %d",
-                  id_, RoleString(), currentTerm_, index);
-        }
-
-        if (IsStandalone()) {
-            //
-            // there is only one node in raft cluster
-            // log proposed should commit and apply soon,
-            // but not before Raft::Propose() return
-            //
-            QueueTaskInLoop([=](){
-                commitIndex_ = index;
-                ApplyLog();
-            });
-        }
-    });
-    return { index, currentTerm, isLeader };
-};
-
-template <typename Task>
-void Raft::RunTaskInLoop(Task&& task)
-{
-    loop_->runInLoop(std::forward<Task>(task));
-}
-
-template <typename Task>
-void Raft::QueueTaskInLoop(Task&& task)
-{
-    loop_->queueInLoop(std::forward<Task>(task));
-}
-
-template <typename Task>
-void Raft::RunTaskInLoopAndWait(Task&& task)
-{
-    ev::CountDownLatch latch(1);
-    RunTaskInLoop([&, this]() {
-        task();
-        latch.count();
-    });
-    latch.wait();
-}
-
-void Raft::StartInLoop()
-{
-    AssertInLoop();
-
-    if (started_)
-        return;
-    started_ = true;
-
-    DEBUG("raft[%d] %s, peerNum = %d starting...",
-          id_, RoleString(), peerNum_);
-
-    // output debug info every 5s
-    loop_->runEvery(5s, [=](){
-        DEBUG("raft[%d] %s, term %d, #votes %d, commit %d",
-              id_, RoleString(), currentTerm_, votesGot_, commitIndex_);
-    });
-
-    // connect other peers, non-blocking!
-    for (int i = 0; i < peerNum_; i++) {
-        if (i != id_) {
-            peers_[i]->Start();
-        }
+    if (isLeader) {
+        log_.Append(currentTerm_, command);
+        DEBUG("raft[%d] %s, term %d, start log %d",
+              id_, RoleString(), currentTerm_, index);
     }
 
-    // tick every 100ms
-    loop_->runEvery(kTimeUnitInMilliseconds * 1ms,
-                    [this](){ Tick(); });
+    if (IsStandalone()) {
+        //
+        // there is only one node in raft cluster
+        // log proposed should commit and apply now
+        //
+        commitIndex_ = index;
+        ApplyLog();
+    }
+
+    return { index, currentTerm, isLeader };
 }
 
 void Raft::StartRequestVote()
 {
-    AssertInLoop();
-    AssertStarted();
-
     RequestVoteArgs args;
     args.term = currentTerm_;
     args.candidateId = id_;
@@ -184,21 +77,8 @@ void Raft::StartRequestVote()
 }
 
 void Raft::RequestVote(const RequestVoteArgs& args,
-                       const RequestVoteCallback& done)
+                       RequestVoteReply& reply)
 {
-    RunTaskInLoop([=]() {
-        RequestVoteReply reply;
-        RequestVoteInLoop(args, reply);
-        done(reply);
-    });
-}
-
-void Raft::RequestVoteInLoop(const RequestVoteArgs& args,
-                             RequestVoteReply& reply)
-{
-    AssertInLoop();
-    AssertStarted();
-
     OnNewInputTerm(args.term);
     ResetTimer();
 
@@ -218,23 +98,11 @@ void Raft::RequestVoteInLoop(const RequestVoteArgs& args,
     }
 }
 
+
 void Raft::OnRequestVoteReply(int peer,
                               const RequestVoteArgs& args,
                               const RequestVoteReply& reply)
 {
-    AssertInLoop();
-    RunTaskInLoop([=]() {
-        OnRequestVoteReplyInLoop(peer, args, reply);
-    });
-}
-
-void Raft::OnRequestVoteReplyInLoop(int peer,
-                                    const RequestVoteArgs& args,
-                                    const RequestVoteReply& reply)
-{
-    AssertInLoop();
-    AssertStarted();
-
     OnNewInputTerm(reply.term);
 
     if (role_ != kCandidate ||      // not a candidate anymore
@@ -254,9 +122,6 @@ void Raft::OnRequestVoteReplyInLoop(int peer,
 
 void Raft::StartAppendEntries()
 {
-    AssertInLoop();
-    AssertStarted();
-
     for (int i = 0; i < peerNum_; i++) {
         if (i == id_)
             continue;
@@ -272,21 +137,8 @@ void Raft::StartAppendEntries()
 }
 
 void Raft::AppendEntries(const AppendEntriesArgs& args,
-                         const AppendEntriesCallback& done)
+                         AppendEntriesReply& reply)
 {
-    RunTaskInLoop([=]() {
-        AppendEntriesReply reply;
-        AppendEntriesInLoop(args, reply);
-        done(reply);
-    });
-}
-
-void Raft::AppendEntriesInLoop(const AppendEntriesArgs& args,
-                               AppendEntriesReply& reply)
-{
-    AssertInLoop();
-    AssertStarted();
-
     OnNewInputTerm(args.term);
     ResetTimer();
 
@@ -331,23 +183,11 @@ void Raft::AppendEntriesInLoop(const AppendEntriesArgs& args,
     }
 }
 
+
 void Raft::OnAppendEntriesReply(int peer,
                                 const AppendEntriesArgs& args,
                                 const AppendEntriesReply& reply)
 {
-    AssertInLoop();
-    RunTaskInLoop([=]() {
-        OnAppendEntriesReplyInLoop(peer, args, reply);
-    });
-}
-
-void Raft::OnAppendEntriesReplyInLoop(int peer,
-                                      const AppendEntriesArgs& args,
-                                      const AppendEntriesReply& reply)
-{
-    AssertInLoop();
-    AssertStarted();
-
     OnNewInputTerm(reply.term);
 
     if (role_ != kLeader || currentTerm_ > reply.term) {
@@ -460,9 +300,10 @@ void Raft::Tick()
     }
 }
 
-void Raft::OnApplyDefault(const ApplyMsg& msg)
+void Raft::DebugOutput() const
 {
-    // todo: print something here?
+    DEBUG("raft[%d] %s, term %d, #votes %d, commit %d",
+          id_, RoleString(), currentTerm_, votesGot_, commitIndex_);
 }
 
 void Raft::ApplyLog()
@@ -507,13 +348,13 @@ void Raft::TickOnHeartbeat()
 void Raft::SetCurrentTerm(int term)
 {
     currentTerm_ = term;
-    storage_->PutCurrentTerm(currentTerm_);
+    storage_.PutCurrentTerm(currentTerm_);
 }
 
 void Raft::SetVotedFor(int votedFor)
 {
     votedFor_ = votedFor;
-    storage_->PutVotedFor(votedFor_);
+    storage_.PutVotedFor(votedFor_);
 }
 
 void Raft::ToFollower(int targetTerm)

@@ -1,28 +1,15 @@
 
+
+#include <chrono>
 #include <tinyev/Logger.h>
+#include <raft/Node.h>
 
-#include <raft/RaftService.h>
-
-using namespace jrpc;
+using namespace std::chrono_literals;
 
 void usage()
 {
     printf("usage: ./raft me address1 address2...");
     exit(EXIT_FAILURE);
-}
-
-void launchRaft(ev::EventLoop* loop, Raft* raft)
-{
-    loop->runEvery(1s, [=](){
-        auto ret = raft->GetState();
-        if (ret.isLeader) {
-            raft->Propose(json::Value("raft example"));
-        }
-    });
-
-    raft->SetApplyCallback([](const ApplyMsg& msg) {
-        assert(msg.command.getStringView() == "raft example");
-    });
 }
 
 int main(int argc, char** argv)
@@ -31,15 +18,14 @@ int main(int argc, char** argv)
         usage();
     }
 
-    ev::EventLoop loop;
-
     setLogLevel(LOG_LEVEL_DEBUG);
 
-    int me = std::stoi(argv[1]);
+    int id = std::stoi(argv[1]);
+
     std::vector<ev::InetAddress>
             peerAddresses;
 
-    if (me + 2 >= argc) {
+    if (id + 2 >= argc) {
         usage();
     }
 
@@ -47,17 +33,30 @@ int main(int argc, char** argv)
         peerAddresses.emplace_back(std::stoi(argv[i]));
     }
 
+    raft::Config config;
+    config.id = id;
+    config.storagePath = "./raft." + std::to_string(id);
+    config.heartbeatTimeout = 1;
+    config.electionTimeout = 5;
+    config.timeUnit = 100ms;
+    config.serverAddress = peerAddresses[id];
+    config.peerAddresses = peerAddresses;
+    config.applyCallback = [](const raft::ApplyMsg& msg) {
+        assert(msg.command.getStringView() == "raft example");
+    };
 
-    Raft raft(me, "./raft." + std::to_string(me));
-    jrpc::RpcServer rpcServer(&loop, peerAddresses[me]);
-    RaftService service(rpcServer, raft);
+    ev::EventLoopThread loopThread;
+    ev::EventLoop* raftServerLoop = loopThread.startLoop();
+    raft::Node raftNode(config, raftServerLoop);
 
-    for (auto& peer: peerAddresses)
-        service.AddRaftPeer(peer);
+    ev::EventLoop loop;
+    loop.runEvery(1s, [&](){
+        auto ret = raftNode.GetState();
+        if (ret.isLeader) {
+            raftNode.Propose(json::Value("raft example"));
+        }
+    });
 
-    launchRaft(&loop, &raft);
-
-    rpcServer.start();
-    service.StartRaft();
+    raftNode.Start();
     loop.loop();
 }

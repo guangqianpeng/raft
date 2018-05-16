@@ -5,15 +5,13 @@
 #include <raft/Raft.h>
 #include <raft/RaftPeer.h>
 
-using namespace jrpc;
+using namespace raft;
 
-RaftPeer::RaftPeer(Raft* raft, int peer, const ev::InetAddress& serverAddress)
-        : raft_(raft)
-        , peer_(peer)
-        , loop_(raft->GetEventLoop())
-        , connected_(false)
+RaftPeer::RaftPeer(int peer, ev::EventLoop* loop, const ev::InetAddress& serverAddress)
+        : peer_(peer)
+        , loop_(loop)
         , serverAddress_(serverAddress)
-        , rpcClient(new RaftClientStub(loop_, serverAddress))
+        , rpcClient(new jrpc::RaftClientStub(loop_, serverAddress))
 {
     SetConnectionCallback();
 }
@@ -43,7 +41,7 @@ void RaftPeer::OnConnection(bool connected)
 
     connected_ = connected;
     if (!connected_) {
-        rpcClient.reset(new RaftClientStub(loop_, serverAddress_));
+        rpcClient.reset(new jrpc::RaftClientStub(loop_, serverAddress_));
         SetConnectionCallback();
         rpcClient->start();
     }
@@ -67,7 +65,7 @@ void RaftPeer::RequestVote(const RequestVoteArgs& args)
         RequestVoteReply reply;
         reply.term = term;
         reply.voteGranted = voteGranted;
-        raft_->OnRequestVoteReply(peer_, args, reply);
+        requestVoteReply_(peer_, args, reply);
     };
 
     rpcClient->RequestVote(args.term,
@@ -99,7 +97,7 @@ void RaftPeer::AppendEntries(const AppendEntriesArgs& args)
             reply.success = success;
             reply.expectIndex = expectIndex;
             reply.expectTerm = expectTerm;
-            raft_->OnAppendEntriesReply(peer_, args, reply);
+            appendEntriesReply_(peer_, args, reply);
         });
     };
 

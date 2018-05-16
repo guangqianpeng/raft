@@ -9,6 +9,8 @@
 
 #include <raft/Storage.h>
 
+using namespace raft;
+
 namespace
 {
 

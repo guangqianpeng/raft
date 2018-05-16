@@ -5,7 +5,8 @@
 #include <leveldb/db.h>
 
 #include <raft/Log.h>
-#include <raft/Storage.h>
+
+using namespace raft;
 
 Log::Log(Storage* storage)
         : storage_(storage)

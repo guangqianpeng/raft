@@ -5,17 +5,22 @@
 #ifndef RAFT_RAFTSERVICE_H
 #define RAFT_RAFTSERVICE_H
 
-#include <raft/Raft.h>
+#include <tinyev/EventLoop.h>
+
 #include <raft/RaftServiceStub.h>
+#include <raft/Callback.h>
 
 class RaftService: public jrpc::RaftServiceStub<RaftService>
 {
 public:
-    RaftService(jrpc::RpcServer& server, Raft& raft);
+    explicit
+    RaftService(jrpc::RpcServer& server);
 
-    void AddRaftPeer(const ev::InetAddress& serverAddress);
+    void SetDoRequestVoteCallback(const raft::DoRequestVoteCallback& cb)
+    { doRequestVote_ = cb; }
 
-    void StartRaft();
+    void SetDoAppendEntriesCallback(const raft::DoAppendEntriesCallback& cb)
+    { doAppendEntries_ = cb; }
 
     void RequestVote(int term,
                      int candidateId,
@@ -30,7 +35,8 @@ public:
                        const jrpc::UserDoneCallback& done);
 
 private:
-    Raft& raft_;
+    raft::DoRequestVoteCallback doRequestVote_;
+    raft::DoAppendEntriesCallback doAppendEntries_;
 };
 
 

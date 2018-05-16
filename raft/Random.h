@@ -7,13 +7,15 @@
 
 #include <random>
 
+namespace raft
+{
+
 class Random
 {
 public:
     Random(int seed, int left, int right)
-            : engine_(seed)
-            , dist_(left, right)
-    { }
+            : engine_(seed), dist_(left, right)
+    {}
 
     int Generate()
     {
@@ -25,5 +27,6 @@ private:
     std::uniform_int_distribution<> dist_;
 };
 
+}
 
 #endif //RAFT_RANDOM_H
