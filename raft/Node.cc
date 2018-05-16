@@ -66,9 +66,8 @@ void Node::StartInLoop()
 {
     AssertInLoop();
 
-    if (started_)
+    if (started_.exchange(true))
         return;
-    started_ = true;
 
     // start rpc server
     rpcServer_.start();
@@ -82,7 +81,7 @@ void Node::StartInLoop()
 
     DEBUG("raft[%d] peerNum = %d starting...", id_, peerNum_);
 
-    loop_->runEvery(std::chrono::seconds(3), [&](){ raft_->DebugOutput(); });
+    loop_->runEvery(std::chrono::seconds(3), [this](){ raft_->DebugOutput(); });
     loop_->runEvery(tickInterval_, [this](){ raft_->Tick(); });
 }
 

@@ -5,6 +5,7 @@
 #ifndef RAFT_NODE_H
 #define RAFT_NODE_H
 
+#include <atomic>
 #include <memory>
 
 #include <tinyev/noncopyable.h>
@@ -33,30 +34,12 @@ public:
     void Start();
 
     //
-    // Thread safe, return
-    // struct RaftState
-    // {
-    //    int currentTerm; // current term
-    //    bool isLeader;   // whether this node believes it is the leader
-    // };
+    // wrapper of Raft::GetState(), thread safe
     //
     RaftState GetState();
 
     //
-    // the service using Raft (e.g. a k/v serverAddress) wants to start
-    // agreement on the next command to be appended to Raft's log. if this
-    // serverAddress isn't the leader, returns false. Otherwise propose the
-    // agreement and return immediately. there is no guarantee that this
-    // command will ever be committed to the Raft log, since the leader
-    // may fail or lose an election.
-    //
-    // Thread safe, return
-    // struct ProposeResult
-    // {
-    //    int expectIndex;  // the index that the command will appear if it's ever committed.
-    //    int currentTerm;  // current term
-    //    bool isLeader;    // true if this node believes it is the leader
-    // };
+    // wrapper of Raft::Propose(), thread safe
     //
     ProposeResult Propose(const json::Value& command);
 
@@ -65,34 +48,35 @@ private:
     void StartInLoop();
 
     //
-    // RequestVote RPC handler, thread safe
+    // wrapper of Raft::RequestVote(), thread safe
     //
     void RequestVote(const RequestVoteArgs& args,
                      const RequestVoteDoneCallback& done);
 
     //
-    // RequestVote done callback, thread safe.
-    // In current implementation, it is only called in Raft thread
+    // wrapper of Raft::OnRequestVoteReply(), thread safe
     //
     void OnRequestVoteReply(int peer,
                             const RequestVoteArgs& args,
                             const RequestVoteReply& reply);
 
     //
-    // AppendEntries RPC handler, thread safe
+    // wrapper of Raft::AppendEntries(), thread safe
     //
     void AppendEntries(const AppendEntriesArgs& args,
                        const AppendEntriesDoneCallback& done);
 
     //
-    // AppendEntries RPC handler, thread safe
-    // In current implementation, it is only called in Raft thread
+    // Wrapper of Raft::OnAppendEntriesReply(), thread safe
     //
     void OnAppendEntriesReply(int peer,
                               const AppendEntriesArgs& args,
                               const AppendEntriesReply& reply);
 
 private:
+    //
+    // eventloop schedulers
+    //
     template<typename Task>
     void RunTaskInLoop(Task&& task);
 
@@ -112,7 +96,7 @@ private:
     { assert(!started_); }
 
 private:
-    bool started_ = false;
+    std::atomic_bool started_ = false;
 
     typedef std::unique_ptr<Raft> RaftPtr;
     RaftPtr raft_;

@@ -28,26 +28,62 @@ public:
     Raft(const Config& config,
          const std::vector<RaftPeer*>& peers);
 
+    //
+    // return
+    // struct RaftState
+    // {
+    //    int currentTerm; // current term
+    //    bool isLeader;   // whether this node believes it is the leader
+    // };
+    //
     RaftState GetState() const;
 
+    //
+    // the service using Raft (e.g. a k/v serverAddress) wants to start
+    // agreement on the next command to be appended to Raft's log. if this
+    // serverAddress isn't the leader, returns false. Otherwise propose the
+    // agreement and return immediately. there is no guarantee that this
+    // command will ever be committed to the Raft log, since the leader
+    // may fail or lose an election.
+    //
+    // Thread safe, return
+    // struct ProposeResult
+    // {
+    //    int expectIndex;  // the index that the command will appear if it's ever committed.
+    //    int currentTerm;  // current term
+    //    bool isLeader;    // true if this node believes it is the leader
+    // };
+    //
     ProposeResult Propose(const json::Value& command);
 
+    //
+    // RequestVote RPC handler
+    //
     void RequestVote(const RequestVoteArgs& args,
                      RequestVoteReply& reply);
 
+    //
+    // RequestVote reply callback
+    //
     void OnRequestVoteReply(int peer,
                             const RequestVoteArgs& args,
                             const RequestVoteReply& reply);
 
+    //
+    // AppendEntries RPC handler
+    //
     void AppendEntries(const AppendEntriesArgs& args,
                        AppendEntriesReply& reply);
 
+    //
+    // AppendEntries reply callback
+    //
     void OnAppendEntriesReply(int peer,
                               const AppendEntriesArgs& args,
                               const AppendEntriesReply& reply);
 
     //
-    // external timer input
+    // external timer input, the frequency is determined by config.timeUnit
     //
     void Tick();
 
