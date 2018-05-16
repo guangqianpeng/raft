@@ -23,7 +23,7 @@ Log::Log(Storage* storage)
     assert(entryNum == log_.size());
 }
 
-Log::IndexAndTerm Log::LastIndexInTerm(int startIndex, int term) const
+IndexAndTerm Log::LastIndexInTerm(int startIndex, int term) const
 {
     int index = std::min(startIndex, lastIndex_);
     for (; index >= FirstIndex(); index--) {
