@@ -29,4 +29,4 @@ add_library(raft STATIC
         Node.cc Node.h
         Config.h Struct.h Random.h Callback.h)
 target_link_libraries(raft jrpc leveldb)
-#install(TARGETS raft DESTINATION lib)
+install(TARGETS raft DESTINATION lib)

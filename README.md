@@ -55,7 +55,7 @@ cd ../raft-build/Release-install/bin
 开一个单节点的raft，server端口号是`9877`，虽然这个server没什么用：
 
 ```sh
-./raft 0 9877 | grep 'raft\['
+./raft_demo 0 9877 | grep 'raft\['
 ```
 
 你可以看到运行的流程，每隔1s，leader就会propose一条log，最后一行是每隔5s输出一次的统计信息：
@@ -80,9 +80,9 @@ cd ../raft-build/Release-install/bin
 开3个节点的raft集群，需要起3个进程，server端口号分别是`9877,9878,9879`分别运行：
 
 ```shell
-./raft 0 9877 9878 9879 | grep 'raft\['
-./raft 1 9877 9878 9879 | grep 'raft\['
-./raft 2 9877 9878 9879 | grep 'raft\['
+./raft_demo 0 9877 9878 9879 | grep 'raft\['
+./raft_demo 1 9877 9878 9879 | grep 'raft\['
+./raft_demo 2 9877 9878 9879 | grep 'raft\['
 ```
 
 你可以看到leader election的过程，然后重启一个进程，看看会发生什么？Have fun :-)
