@@ -2,9 +2,9 @@
 
 # 简介
 
-该版本的raft实现源自[MIT 6.824](http://nil.csail.mit.edu/6.824/2017/)，做完lab以后我用C++实现了一遍。相比于go语言的版本，这个版本的特点有：
+该版本的raft实现源自[MIT 6.824](http://nil.csail.mit.edu/6.824/2017/)，做完lab以后我尝试用C++一遍。相比于go语言的版本，这个版本的特点有：
 
-- RPC框架使用了我自己写的[jrpc](https://github.com/guangqianpeng/jrpc)，请求和响应均为异步的，而lab中是同步的
+- RPC框架使用了我自己写的[jrpc](https://github.com/guangqianpeng/jrpc)，请求是异步的，而lab中是同步的
 - 使用多线程 + EventLoop的并发模型，而不是goroutine
 - 使用EventLoop, CountdownLatch之类的线程同步设施，拒绝直接使用mutex
 - 使用JSON格式的序列化/反序列化，使用LevelDB持久化JSON文本（应该用protobuf ？）
@@ -23,22 +23,16 @@
 
 # 实现
 
-一个raft节点有两个线程（其实就是两个EventLoop），一个跑rpc serverAddress，另一个跑raft算法以及rpc client。若将这些东西放在一个线程里面固然可以简化代码（单线程编程），但是由于rpc框架调度的延迟不确定，可能导致心跳发送不及时。也许应该把rpc client单独放在一个线程，在jrpc的支持下这点不难做到。
+一个raft节点有两个线程（即两个EventLoop），一个跑rpc server，另一个跑raft算法以及rpc client。若将这两部分放在一个线程里面固然可以简化代码（单线程编程），但是由于rpc框架调度的延迟不确定，可能导致心跳发送不及时。也许应该把rpc client单独放在一个线程，在jrpc的支持下这点不难做到。
 
-我在实现raft算法时将其看成一个状态机，状态机的输入有：
+核心部分是raft的纯算法实现（Raft.cc/Raft.h），它的rpc请求、回复以及时钟都需要外部输入，这些输入具体包括：
 
 - rpc server收到的请求（`Raft::RequestVote()`，`Raft::AppendEntries()`）
 - rpc client收到的回复 （`Raft::OnRequestVoteReply()`， `Raft::OnAppendEntriesReply()`）
-- 10Hz的时钟激励（`Raft::Tick()`，由raft线程内部完成）
+- 固定频率的时钟激励（`Raft::Tick()`）
 - raft用户尝试提交log（`Raft::Propose()`）
 
-状态机的输出有：
-
-- rpc server发送回复（在收到请求时填写`struct RequestVoteReply`和`struct AppendEntriesReply`）
-- rpc client发送请求（`RaftPeer::RequestVote()`，`RaftPeer::AppendEntries()`）
-- 向raft用户汇报log（`Raft::ApplyLog()`）
-
-这样做的好处之一是处理rpc超时、乱序时简单一些。也许还可以简化测试？
+我并没有将rpc请求和回复关联起来，而是当成独立的消息输入来处理，这样方便了处理 expired/duplicate/out-of-order rpc 消息。用户并不直接使用Raft类，而是使用Node类（Node.h/Node.cc）。Node类封装了rpc通信、时钟、多线程等内容。
 
 # 玩一下
 
@@ -91,4 +85,4 @@ cd ../raft-build/Release-install/bin
 ./raft 2 9877 9878 9879 | grep 'raft\['
 ```
 
-你可以看到leader election的过程，然后kill掉1个进程，看看会发生什么？Have fun :-)
+你可以看到leader election的过程，然后重启一个进程，看看会发生什么？Have fun :-)

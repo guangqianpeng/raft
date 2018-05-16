@@ -47,3 +47,4 @@ include_directories(
         ${PROJECT_BINARY_DIR})
 add_subdirectory(3rd/jrpc)
 add_subdirectory(raft)
+add_subdirectory(example)

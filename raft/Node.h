@@ -18,13 +18,13 @@
 #include <raft/RaftPeer.h>
 #include <raft/RaftService.h>
 
+
 namespace raft
 {
 
 class Node : ev::noncopyable
 {
 public:
-    explicit
     Node(const Config& config, ev::EventLoop* serverLoop);
 
     //

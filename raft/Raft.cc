@@ -45,7 +45,7 @@ ProposeResult Raft::Propose(const json::Value& command)
 
     if (isLeader) {
         log_.Append(currentTerm_, command);
-        DEBUG("raft[%d] %s, term %d, start log %d",
+        DEBUG("raft[%d] %s, term %d, propose log %d",
               id_, RoleString(), currentTerm_, index);
     }
 

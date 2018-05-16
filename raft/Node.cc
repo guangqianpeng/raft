@@ -15,6 +15,16 @@ using namespace std::chrono_literals;
 
 using namespace raft;
 
+namespace
+{
+
+void CheckConfig(const Config& c)
+{
+
+}
+
+}
+
 Node::Node(const Config& c, ev::EventLoop* serverLoop)
         : id_(c.id)
         , peerNum_(static_cast<int>(c.peerAddresses.size()))
@@ -23,7 +33,8 @@ Node::Node(const Config& c, ev::EventLoop* serverLoop)
         , raftService_(rpcServer_)
         , loop_(loopThread_.startLoop())
 {
-//    loop_ = loopThread_.startLoop();
+    CheckConfig(c);
+
     std::vector<RaftPeer*> rawPeers;
     for (int i = 0; i < peerNum_; i++) {
         // fixme: pass serverLoop or loop_ ???
