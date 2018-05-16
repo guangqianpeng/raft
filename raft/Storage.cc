@@ -24,7 +24,7 @@ const char* kVotedForKey    = " votedFor";
 const char* kFirstIndexKey  = " firstIndex";
 const char* kLastIndexKey   = " lastIndex";
 
-json::Value ParseSlice(leveldb::Slice slice)
+json::Value ParseSlice(const leveldb::Slice& slice)
 {
     json::Document doc;
     std::string_view view(slice.data(), slice.size());

@@ -54,6 +54,11 @@ struct RaftState
     bool isLeader = false;
 };
 
+struct IndexAndTerm
+{
+    int index;
+    int term;
+};
 
 struct ApplyMsg
 {

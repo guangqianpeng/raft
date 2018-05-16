@@ -11,6 +11,7 @@
 #include <tinyev/noncopyable.h>
 #include <jackson/Value.h>
 #include <raft/Storage.h>
+#include <raft/Struct.h>
 
 namespace raft
 {
@@ -38,12 +39,6 @@ public:
 
     const json::Value& CommandAt(int index) const
     { return log_[index].command; }
-
-    struct IndexAndTerm
-    {
-        int index;
-        int term;
-    };
 
     IndexAndTerm LastIndexInTerm(int startIndex, int term) const;
 

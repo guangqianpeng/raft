@@ -29,7 +29,7 @@ public:
     Node(const Config& config, ev::EventLoop* serverLoop);
 
     //
-    // start the raft instance, thread safe
+    // start the node instance, thread safe
     //
     void Start();
 
@@ -75,7 +75,7 @@ private:
 
 private:
     //
-    // eventloop schedulers
+    // three kinds of eventloop schedulers
     //
     template<typename Task>
     void RunTaskInLoop(Task&& task);
@@ -96,13 +96,12 @@ private:
     { assert(!started_); }
 
 private:
-    std::atomic_bool started_ = false;
-
     typedef std::unique_ptr<Raft> RaftPtr;
-    RaftPtr raft_;
-
     typedef std::unique_ptr<RaftPeer> RaftPeerPtr;
     typedef std::vector<RaftPeerPtr> RaftPeerList;
+
+    std::atomic_bool started_ = false;
+    RaftPtr raft_;
     RaftPeerList peers_;
 
     const int id_;
