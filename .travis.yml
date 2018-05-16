@@ -20,7 +20,7 @@ script:
   - sudo unlink /usr/bin/g++
   - sudo ln -s /usr/bin/g++-7 /usr/bin/g++
   - g++ -v
-  - sudo apt isntall libleveldb-dev
+  - sudo apt install libleveldb-dev
   - ./build.sh && ./build.sh install
 notifications:
   email: never
