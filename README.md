@@ -47,6 +47,7 @@
 **首先，你需要gcc 7.x或者更高的版本，可以手动安装或者直接上Ubuntu 18.04。。。**
 
 ```sh
+sudo apt install libleveldb-dev
 git clone https://github.com/guangqianpeng/raft.git
 cd raft
 git submodule update --init --recursive

@@ -29,7 +29,7 @@ json::Value ParseSlice(leveldb::Slice slice)
     json::Document doc;
     std::string_view view(slice.data(), slice.size());
     json::ParseError ret = doc.parse(view);
-    assert(ret == json::PARSE_OK);
+    assert(ret == json::PARSE_OK); (void)ret;
     return doc;
 }
 

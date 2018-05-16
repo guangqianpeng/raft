@@ -44,6 +44,9 @@ int main(int argc, char** argv)
     config.applyCallback = [](const raft::ApplyMsg& msg) {
         assert(msg.command.getStringView() == "raft example");
     };
+    config.snapshotCallback = [](const json::Value& snapshot) {
+        FATAL("not implemented yet");
+    };
 
     ev::EventLoopThread loopThread;
     ev::EventLoop* raftServerLoop = loopThread.startLoop();
