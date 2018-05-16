@@ -25,14 +25,14 @@
 
 一个raft节点有两个线程（即两个EventLoop），一个跑rpc server，另一个跑raft算法以及rpc client。若将这两部分放在一个线程里面固然可以简化代码（单线程编程），但是由于rpc框架调度的延迟不确定，可能导致心跳发送不及时。也许应该把rpc client单独放在一个线程，在jrpc的支持下这点不难做到。
 
-核心部分是raft的纯算法实现（Raft.cc/Raft.h），它的rpc请求、回复以及时钟都需要外部输入，这些输入具体包括：
+核心部分是raft的纯算法实现（[Raft.cc](raft/Raft.cc)/[Raft.h](raft/raft.h)），它的rpc请求、回复以及时钟都需要外部输入，这些输入具体包括：
 
 - rpc server收到的请求（`Raft::RequestVote()`，`Raft::AppendEntries()`）
 - rpc client收到的回复 （`Raft::OnRequestVoteReply()`， `Raft::OnAppendEntriesReply()`）
 - 固定频率的时钟激励（`Raft::Tick()`）
 - raft用户尝试提交log（`Raft::Propose()`）
 
-我并没有将rpc请求和回复关联起来，而是当成独立的消息输入来处理，这样方便了处理 expired/duplicate/out-of-order rpc 消息。用户并不直接使用Raft类，而是使用Node类（Node.h/Node.cc）。Node类封装了rpc通信、时钟、多线程等内容。
+我并没有将rpc请求和回复关联起来，而是当成独立的消息输入来处理，这样方便了处理 expired/duplicate/out-of-order rpc 消息。用户并不直接使用Raft类，而是使用Node类（[Node.h](raft/Node.h)/[Node.cc](raft/Node.cc)）。Node类封装了rpc通信、时钟、多线程等内容。
 
 # 玩一下
 

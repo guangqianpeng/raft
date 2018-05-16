@@ -11,8 +11,6 @@ using std::placeholders::_1;
 using std::placeholders::_2;
 using std::placeholders::_3;
 
-using namespace std::chrono_literals;
-
 using namespace raft;
 
 namespace
@@ -20,7 +18,7 @@ namespace
 
 void CheckConfig(const Config& c)
 {
-
+    // todo
 }
 
 }
