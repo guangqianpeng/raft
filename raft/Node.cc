@@ -82,7 +82,7 @@ void Node::StartInLoop()
 
     DEBUG("raft[%d] peerNum = %d starting...", id_, peerNum_);
 
-    loop_->runEvery(3s, [&](){ raft_->DebugOutput(); });
+    loop_->runEvery(std::chrono::seconds(3), [&](){ raft_->DebugOutput(); });
     loop_->runEvery(tickInterval_, [this](){ raft_->Tick(); });
 }
 
