@@ -31,11 +31,18 @@ string(REPLACE ";" " " CMAKE_CXX_FLAGS "${CXX_FLAGS}")
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 
+find_path(LEVELDB_INCLUDE_PATH NAMES leveldb/db.h)
+find_library(LEVELDB_LIB NAMES leveldb)
+if ((NOT LEVELDB_INCLUDE_PATH) OR (NOT LEVELDB_LIB))
+    message(FATAL_ERROR "Fail to find leveldb")
+endif()
+
 include_directories(
         raft
         3rd/jrpc
         3rd/jrpc/3rd/tinyev
         3rd/jrpc/3rd/jackson
+        ${LEVELDB_INCLUDE_PATH}
         ${PROJECT_SOURCE_DIR}
         ${PROJECT_BINARY_DIR})
 add_subdirectory(3rd/jrpc)
