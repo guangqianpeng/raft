@@ -33,24 +33,30 @@ public:
     void Start();
 
     //
-    // thread safe, return:
-    //   1. current term
-    //   2. whether this serverAddress believes it is the leader
+    // Thread safe, return
+    // struct RaftState
+    // {
+    //    int currentTerm; // current term
+    //    bool isLeader;   // whether this node believes it is the leader
+    // };
     //
     RaftState GetState();
 
     //
     // the service using Raft (e.g. a k/v serverAddress) wants to start
     // agreement on the next command to be appended to Raft's log. if this
-    // serverAddress isn't the leader, returns false. Otherwise start the
+    // serverAddress isn't the leader, returns false. Otherwise propose the
     // agreement and return immediately. there is no guarantee that this
     // command will ever be committed to the Raft log, since the leader
-    // may fail or lose an election. Thread safe.
+    // may fail or lose an election.
     //
-    // return:
-    //   1. the index that the command will appear if it's ever committed.
-    //   2. current term.
-    //   3. true if this serverAddress believes it is the leader.
+    // Thread safe, return
+    // struct ProposeResult
+    // {
+    //    int expectIndex;  // the index that the command will appear if it's ever committed.
+    //    int currentTerm;  // current term
+    //    bool isLeader;    // true if this node believes it is the leader
+    // };
     //
     ProposeResult Propose(const json::Value& command);
 

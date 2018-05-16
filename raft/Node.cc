@@ -44,9 +44,9 @@ Node::Node(const Config& c, ev::EventLoop* serverLoop)
 
     for (auto peer: rawPeers) {
         peer->SetRequestVoteReplyCallback(
-                std::bind(&Raft::OnRequestVoteReply, raft_.get(), _1, _2, _3));
+                std::bind(&Node::OnRequestVoteReply, this, _1, _2, _3));
         peer->SetAppendEntriesReplyCallback(
-                std::bind(&Raft::OnAppendEntriesReply, raft_.get(), _1, _2, _3));
+                std::bind(&Node::OnAppendEntriesReply, this, _1, _2, _3));
     }
 
     raftService_.SetDoRequestVoteCallback(

@@ -8,7 +8,7 @@ using namespace std::chrono_literals;
 
 void usage()
 {
-    printf("usage: ./raft me address1 address2...");
+    printf("usage: ./raft id address1 address2...");
     exit(EXIT_FAILURE);
 }
 

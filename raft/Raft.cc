@@ -51,8 +51,8 @@ ProposeResult Raft::Propose(const json::Value& command)
 
     if (IsStandalone()) {
         //
-        // there is only one node in raft cluster
-        // log proposed should commit and apply now
+        // there is only one node in raft cluster,
+        // log proposed can be committed and applied right now
         //
         commitIndex_ = index;
         ApplyLog();

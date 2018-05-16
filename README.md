@@ -2,7 +2,7 @@
 
 # 简介
 
-该版本的raft实现源自[MIT 6.824](http://nil.csail.mit.edu/6.824/2017/)，做完lab以后我尝试用C++一遍。相比于go语言的版本，这个版本的特点有：
+该版本的raft实现源自[MIT 6.824](http://nil.csail.mit.edu/6.824/2017/)，做完lab以后我尝试用C++实现一遍。相比于go语言的版本，这个版本的特点有：
 
 - RPC框架使用了我自己写的[jrpc](https://github.com/guangqianpeng/jrpc)，请求是异步的，而lab中是同步的
 - 使用多线程 + EventLoop的并发模型，而不是goroutine
@@ -32,7 +32,7 @@
 - 固定频率的时钟激励（`Raft::Tick()`）
 - raft用户尝试提交log（`Raft::Propose()`）
 
-我并没有将rpc请求和回复关联起来，而是当成独立的消息输入来处理，这样方便了处理 expired/duplicate/out-of-order rpc 消息。用户并不直接使用Raft类，而是使用Node类（[Node.h](raft/Node.h)/[Node.cc](raft/Node.cc)）。Node类封装了rpc通信、时钟、多线程等内容。
+我并没有将rpc请求和回复关联起来，而是当成独立的消息输入来处理，这样方便处理 expired/duplicate/out-of-order rpc 消息。用户并不直接使用Raft类，而是使用Node类（[Node.h](raft/Node.h)/[Node.cc](raft/Node.cc)）。Node类封装了rpc通信、时钟、多线程等内容。
 
 # 玩一下
 

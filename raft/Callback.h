@@ -31,7 +31,6 @@ typedef std::function<void(int,
 typedef std::function<void(int,
                            const AppendEntriesArgs&,
                            const AppendEntriesReply&)> AppendEntriesReplyCallback;
-
 typedef std::function<void(const ApplyMsg&)> ApplyCallback;
 typedef std::function<void(const json::Value&)> SnapshotCallback;
 
